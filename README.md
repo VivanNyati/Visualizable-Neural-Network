@@ -47,6 +47,8 @@ MNIST downloads on the first run. The dashboard includes:
 - Up to eight images with predicted and true labels.
 - **Pause / Resume** and **Stop & save** controls. Closing the window also stops
   training and saves current weights after finishing the current batch.
+  After stopping or completing training, the window confirms where the model
+  was saved, disables Pause, and changes **Stop & save** to **Close**.
 
 The architecture is `1x28x28 -> Conv(8) -> ReLU -> Pool -> Conv(16) -> ReLU -> Pool
 -> Linear(64) -> ReLU -> Linear(10)`: **52,138 parameters**. There is no dropout,
@@ -131,6 +133,8 @@ points. Run `python train.py --help` or `python predict.py --help` for all optio
 
 ## Code layout and checks
 
+See the [improvement roadmap](docs/roadmap.md) for the next ten focused changes.
+
 | File | Purpose |
 | --- | --- |
 | `model.py` | CNN, traced forward pass, device selection, checkpoint format |
@@ -140,6 +144,7 @@ points. Run `python train.py --help` or `python predict.py --help` for all optio
 | `dashboard.py` | Persistent plot artists and interactive controls |
 | `test_core.py` | Forward tracing, weight updates, checkpoint and image tests |
 | `test_dashboard.py` | Headless rendering, small batches, filter slider |
+| `test_train.py` | Completed and interrupted training checkpoint checks |
 
 ```sh
 python -m unittest discover -v

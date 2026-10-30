@@ -18,11 +18,13 @@ def positive(value):
     return number
 
 
-def evaluate(model, loader, device):
+def evaluate(model, loader, device, pump=None):
     model.eval()
     loss, correct, count = 0., 0, 0
     with torch.inference_mode():
         for images, labels in loader:
+            if pump is not None:
+                pump()
             images, labels = images.to(device), labels.to(device)
             logits = model(images)
             loss += torch.nn.functional.cross_entropy(logits, labels, reduction='sum').item()
@@ -113,9 +115,11 @@ def main(argv=None):
                     dashboard.update(model, images, labels, step, total_loss/count,
                                      100*correct/count, status)
                     last_draw = now
+            if dashboard.stopped:
+                interrupted = True
             if interrupted:
                 break
-            validation_metrics = evaluate(model, val_loader, device)
+            validation_metrics = evaluate(model, val_loader, device, dashboard.pump)
             epochs_completed = epoch + 1
             record = {'epoch': epochs_completed, 'train_loss': total_loss/count,
                       'train_accuracy': correct/count, 'validation': validation_metrics}
@@ -125,11 +129,15 @@ def main(argv=None):
             # A usable checkpoint survives even if a subsequent epoch is interrupted.
             save_checkpoint(model, args.checkpoint, {'epochs_completed': epochs_completed,
                             'steps': step, 'seed': args.seed, 'history': history})
+            if dashboard.stopped:
+                interrupted = True
+                break
     except KeyboardInterrupt:
         interrupted = True
         print('\nInterrupted; saving current weights.', flush=True)
 
-    test_metrics = evaluate(model, test_loader, device) if step else None
+    dashboard.saving()
+    test_metrics = evaluate(model, test_loader, device, dashboard.pump) if step else None
     metadata = {'epochs_completed': epochs_completed, 'steps': step, 'seed': args.seed,
                 'interrupted': interrupted, 'history': history, 'test': test_metrics,
                 'train_samples': len(train), 'elapsed_seconds': time.monotonic()-started}
@@ -138,10 +146,12 @@ def main(argv=None):
     (args.run_dir / 'metrics.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
     status = 'Stopped' if interrupted else 'Finished'
     suffix = f'Test accuracy: {test_metrics["accuracy"]:.2%}' if test_metrics else 'No training steps'
-    dashboard.status.set_text(f'{status}   |   {suffix}   |   {step} optimizer steps')
+    dashboard.finish(f'{status} & saved   |   {suffix}   |   {step} optimizer steps'
+                     if step else 'Stopped before training; no model saved',
+                     args.checkpoint if step else None)
     export(dashboard.fig, args.run_dir / 'training.png')
     print(f'{status}. {suffix}. Checkpoint: {args.checkpoint if step else "not saved"}', flush=True)
-    if not args.no_ui and not dashboard.stopped:
+    if not args.no_ui and plt.fignum_exists(dashboard.fig.number):
         plt.ioff()
         plt.show()
     plt.close(dashboard.fig)

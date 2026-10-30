@@ -59,12 +59,14 @@ class TrainingDashboard:
     def __init__(self, model, live=True):
         theme()
         self.live, self.paused, self.stopped = live, False, False
+        self.finished = False
         self.steps, self.losses, self.accuracies = [], [], []
         self.fig = plt.figure(figsize=(15, 9))
         self.fig.canvas.manager.set_window_title('Digit Lab | Training')
         self.fig.suptitle('DIGIT LAB  /  LEARNING IN MOTION', x=.055, ha='left',
                           fontsize=19, fontweight='bold', y=.975)
         self.status = self.fig.text(.055, .915, 'Preparing MNIST...', color=MUTED)
+        self.save_status = self.fig.text(.055, .105, '', color=GREEN, fontsize=8)
         grid = self.fig.add_gridspec(2, 3, left=.055, right=.96, top=.85,
                                     bottom=.16, hspace=.45, wspace=.32)
         loss_ax, acc_ax, weights_ax, feature_ax, matrix_ax, sample_ax = [
@@ -102,17 +104,51 @@ class TrainingDashboard:
                                       'Stop & save', color=PANEL, hovercolor='#30415c')
             self.pause_button.on_clicked(self.toggle_pause)
             self.stop_button.on_clicked(self.stop)
-            self.fig.canvas.mpl_connect('close_event', self.stop)
+            self.fig.canvas.mpl_connect('close_event', self.window_closed)
             plt.ion()
             plt.show(block=False)
 
     def toggle_pause(self, _):
+        if self.stopped or self.finished:
+            return
         self.paused = not self.paused
         self.pause_button.label.set_text('Resume' if self.paused else 'Pause')
+        self.fig.canvas.draw_idle()
 
     def stop(self, _):
+        if self.finished:
+            plt.close(self.fig)
+            return
         self.stopped = True
         self.paused = False
+        self.saving()
+
+    def window_closed(self, event):
+        if not self.finished:
+            self.stop(event)
+
+    def saving(self):
+        self.paused = False
+        self.status.set_text('Saving model and evaluating final results...')
+        if self.live:
+            self.pause_button.set_active(False)
+            self.pause_button.label.set_color(MUTED)
+            self.stop_button.set_active(False)
+            self.stop_button.label.set_text('Saving...')
+        self.fig.canvas.draw_idle()
+
+    def finish(self, status, checkpoint=None):
+        self.finished = True
+        self.paused = False
+        self.status.set_text(status)
+        self.save_status.set_text(f'Model saved to: {checkpoint}' if checkpoint else
+                                  'No model saved: stopped before the first training step.')
+        if self.live:
+            self.pause_button.set_active(False)
+            self.pause_button.label.set_color(MUTED)
+            self.stop_button.label.set_text('Close')
+            self.stop_button.set_active(True)
+        self.fig.canvas.draw_idle()
 
     def pump(self):
         if self.live and plt.fignum_exists(self.fig.number):

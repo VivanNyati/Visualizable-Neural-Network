@@ -1,8 +1,10 @@
 """Headless rendering and interaction checks: python -m unittest -v test_dashboard."""
 import unittest
+from unittest.mock import patch
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.backend_bases import MouseEvent
 import torch
 from dashboard import TrainingDashboard, PredictionDashboard
 from images import explain
@@ -10,6 +12,49 @@ from model import DigitNet
 
 
 class DashboardTests(unittest.TestCase):
+    def click(self, view, button):
+        view.fig.canvas.draw()
+        x, y = button.ax.transAxes.transform((.5, .5))
+        for name in ['button_press_event', 'button_release_event']:
+            event = MouseEvent(name, view.fig.canvas, x, y, button=1)
+            view.fig.canvas.callbacks.process(name, event)
+
+    def test_stop_while_paused_then_close_saved_results(self):
+        with patch('matplotlib.pyplot.show'):
+            view = TrainingDashboard(DigitNet(), live=True)
+        try:
+            self.click(view, view.pause_button)
+            self.assertTrue(view.paused)
+            self.click(view, view.stop_button)
+            self.assertTrue(view.stopped)
+            self.assertFalse(view.paused)
+            self.assertFalse(view.pause_button.active)
+            self.assertEqual(view.stop_button.label.get_text(), 'Saving...')
+            view.finish('Stopped & saved', 'runs/preview/mnist.pt')
+            self.assertIn('runs/preview/mnist.pt', view.save_status.get_text())
+            self.assertEqual(view.stop_button.label.get_text(), 'Close')
+            self.assertTrue(plt.fignum_exists(view.fig.number))
+            self.click(view, view.stop_button)
+            self.assertFalse(plt.fignum_exists(view.fig.number))
+        finally:
+            plt.close(view.fig)
+            plt.ioff()
+
+    def test_natural_completion_disables_pause_and_close_works(self):
+        with patch('matplotlib.pyplot.show'):
+            view = TrainingDashboard(DigitNet(), live=True)
+        try:
+            view.saving()
+            view.finish('Finished & saved', 'mnist.pt')
+            self.click(view, view.pause_button)
+            self.assertFalse(view.paused)
+            self.assertFalse(view.pause_button.active)
+            self.click(view, view.stop_button)
+            self.assertFalse(plt.fignum_exists(view.fig.number))
+        finally:
+            plt.close(view.fig)
+            plt.ioff()
+
     def test_training_handles_small_batch_and_reuses_axes(self):
         torch.set_num_threads(2)
         model = DigitNet()
