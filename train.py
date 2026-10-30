@@ -90,6 +90,7 @@ def main(argv=None):
     args.run_dir.mkdir(parents=True, exist_ok=True)
     try:
         for epoch in range(args.epochs):
+            dashboard.begin_epoch(epoch + 1)
             model.train()
             total_loss, correct, count = 0., 0, 0
             for batch, (images, labels) in enumerate(train_loader, 1):
@@ -119,7 +120,12 @@ def main(argv=None):
                 interrupted = True
             if interrupted:
                 break
+            dashboard.validation_started(epoch + 1)
+            if dashboard.stopped:
+                interrupted = True
+                break
             validation_metrics = evaluate(model, val_loader, device, dashboard.pump)
+            dashboard.record_validation(epoch + 1, step, validation_metrics)
             epochs_completed = epoch + 1
             record = {'epoch': epochs_completed, 'train_loss': total_loss/count,
                       'train_accuracy': correct/count, 'validation': validation_metrics}

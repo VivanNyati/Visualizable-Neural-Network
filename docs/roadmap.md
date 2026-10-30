@@ -7,7 +7,7 @@ later items may be adjusted as user feedback reveals better priorities.
 | # | Planned commit | Improvement and acceptance checks | Status |
 | --- | --- | --- | --- |
 | 1 | Fix training stop, save, and completed controls | Show saving feedback and the checkpoint location; keep saved results open; turn the action into Close; disable Pause after completion. Check normal completion, stopping while paused, stopping on the last batch or during validation, and stopping before any weight update. | Implemented |
-| 2 | Show validation progress and epoch boundaries | Add validation metrics and visible epoch boundaries so the resetting training averages do not look like unexplained jumps. Label training and validation separately. | Planned |
+| 2 | Show validation progress and epoch boundaries | Add validation metrics and visible epoch boundaries so the resetting training averages do not look like unexplained jumps. Label training and validation separately. | Implemented |
 | 3 | Preserve the best validation model | Save the best validation checkpoint alongside the latest weights and report its epoch. Select models using validation only; keep the test set for final evaluation. | Planned |
 | 4 | Organize training runs and model selection | Give runs distinct folders and summaries; let prediction select a saved run without manually typing a checkpoint path. Check that a new run preserves earlier models. | Planned |
 | 5 | Load another image from the inspector | Add an Open image control that refreshes the existing inspector. Handle cancellation and invalid images without losing the loaded model or closing the window. | Planned |

@@ -12,6 +12,30 @@ from model import DigitNet
 
 
 class DashboardTests(unittest.TestCase):
+    def test_validation_points_epoch_gaps_and_loss_scale(self):
+        model = DigitNet()
+        view = TrainingDashboard(model, live=False)
+        try:
+            images = torch.randn(1, 1, 28, 28)
+            labels = torch.zeros(1, dtype=torch.long)
+            view.begin_epoch(1)
+            view.update(model, images, labels, 10, .5, 80, 'Epoch 1')
+            view.validation_started(1)
+            self.assertIn('Evaluating validation', view.status.get_text())
+            view.record_validation(1, 10, {'loss': 3., 'accuracy': .75})
+            view.begin_epoch(2)
+            view.update(model, images, labels, 20, .2, 90, 'Epoch 2')
+            view.record_validation(2, 20, {'loss': 2., 'accuracy': .85})
+            self.assertTrue(torch.isnan(torch.tensor(view.loss_line.get_ydata()[1])))
+            self.assertEqual(list(view.validation_loss_line.get_xdata()), [10, 20])
+            self.assertEqual(list(view.validation_acc_line.get_ydata()), [75, 85])
+            self.assertGreater(view.loss_ax.get_ylim()[1], 3.)
+            self.assertEqual([text.get_text() for text in view.loss_ax.texts], ['E1', 'E2'])
+            self.assertEqual(view.acc_ax.get_ylim(), (0, 100))
+            view.fig.canvas.draw()
+        finally:
+            plt.close(view.fig)
+
     def click(self, view, button):
         view.fig.canvas.draw()
         x, y = button.ax.transAxes.transform((.5, .5))

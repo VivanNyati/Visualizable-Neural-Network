@@ -63,6 +63,10 @@ class TrainingSaveTests(unittest.TestCase):
                 self.assertEqual(metadata['epochs_completed'],
                                  int(stop_at in [None, 'validation']))
                 self.assertTrue(views[0].finished)
+                self.assertEqual(views[0].validation_losses,
+                                 [row['validation']['loss'] for row in metadata['history']])
+                self.assertEqual(views[0].validation_accuracies,
+                                 [100 * row['validation']['accuracy'] for row in metadata['history']])
                 if trained:
                     _, saved = load_checkpoint(checkpoint, torch.device('cpu'))
                     self.assertEqual(saved, metadata)

@@ -61,6 +61,7 @@ class TrainingDashboard:
         self.live, self.paused, self.stopped = live, False, False
         self.finished = False
         self.steps, self.losses, self.accuracies = [], [], []
+        self.validation_steps, self.validation_losses, self.validation_accuracies = [], [], []
         self.fig = plt.figure(figsize=(15, 9))
         self.fig.canvas.manager.set_window_title('Digit Lab | Training')
         self.fig.suptitle('DIGIT LAB  /  LEARNING IN MOTION', x=.055, ha='left',
@@ -71,14 +72,22 @@ class TrainingDashboard:
                                     bottom=.16, hspace=.45, wspace=.32)
         loss_ax, acc_ax, weights_ax, feature_ax, matrix_ax, sample_ax = [
             self.fig.add_subplot(grid[r, c]) for r in range(2) for c in range(3)]
-        self.loss_line, = loss_ax.plot([], [], color=CYAN, lw=2)
-        self.acc_line, = acc_ax.plot([], [], color=GREEN, lw=2)
-        for ax, title, ylabel in [(loss_ax, '01 / Training loss', 'Cross entropy'),
-                                   (acc_ax, '02 / Training accuracy', 'Correct (%)')]:
+        self.loss_line, = loss_ax.plot([], [], '.-', color=CYAN, lw=2, ms=3,
+                                      label='Training (epoch average)')
+        self.acc_line, = acc_ax.plot([], [], '.-', color=GREEN, lw=2, ms=3,
+                                     label='Training (epoch average)')
+        self.validation_loss_line, = loss_ax.plot([], [], 'o--', color=RED, ms=5,
+                                                  label='Validation (epoch end)')
+        self.validation_acc_line, = acc_ax.plot([], [], 'o--', color=RED, ms=5,
+                                               label='Validation (epoch end)')
+        for ax, title, ylabel in [(loss_ax, '01 / Loss', 'Cross entropy'),
+                                   (acc_ax, '02 / Accuracy', 'Correct (%)')]:
             ax.set_title(title, loc='left', pad=10)
             ax.set_xlabel('Optimizer step')
             ax.set_ylabel(ylabel)
             ax.grid(alpha=.12)
+            ax.legend(loc='best', fontsize=7, facecolor=PANEL, edgecolor='#30415c',
+                      labelcolor=TEXT)
         acc_ax.set_ylim(0, 100)
         self.weight = heat(weights_ax, mosaic(array(model.conv1.weight[:, 0])),
                            '03 / Learned 3 x 3 filters', True)
@@ -156,6 +165,39 @@ class TrainingDashboard:
             while self.paused and not self.stopped:
                 plt.pause(.05)
 
+    def begin_epoch(self, epoch):
+        # Break the curve where the cumulative training average resets.
+        if self.steps:
+            self.steps.append(self.steps[-1])
+            self.losses.append(float('nan'))
+            self.accuracies.append(float('nan'))
+
+    def validation_started(self, epoch):
+        self.status.set_text(f'Epoch {epoch}   |   Evaluating validation set...')
+        if self.live:
+            self.fig.canvas.draw_idle()
+            self.pump()
+
+    def record_validation(self, epoch, step, metrics):
+        self.validation_steps.append(step)
+        self.validation_losses.append(metrics['loss'])
+        self.validation_accuracies.append(100 * metrics['accuracy'])
+        self.validation_loss_line.set_data(self.validation_steps, self.validation_losses)
+        self.validation_acc_line.set_data(self.validation_steps, self.validation_accuracies)
+        for ax in (self.loss_ax, self.acc_ax):
+            ax.axvline(step, color=MUTED, ls=':', lw=1, alpha=.5)
+            ax.text(step, .98, f'E{epoch}', transform=ax.get_xaxis_transform(),
+                    ha='right', va='top', color=MUTED, fontsize=7)
+        self.loss_ax.relim()
+        self.loss_ax.autoscale_view()
+        self.acc_ax.set_xlim(0, max(step * 1.03, 1))
+        if not self.stopped:
+            self.status.set_text(f'Epoch {epoch} complete   |   Validation loss: '
+                                 f'{metrics["loss"]:.4f}   |   Accuracy: {metrics["accuracy"]:.1%}')
+        if self.live:
+            self.fig.canvas.draw_idle()
+            self.pump()
+
     def update(self, model, images, labels, step, loss, accuracy, status):
         self.steps.append(step)
         self.losses.append(loss)
@@ -168,7 +210,7 @@ class TrainingDashboard:
         self.acc_line.set_data(self.steps, self.accuracies)
         self.loss_ax.relim()
         self.loss_ax.autoscale_view()
-        self.acc_ax.set_xlim(0, max(step, 1))
+        self.acc_ax.set_xlim(0, max(step * 1.03, 1))
         import torch
         with torch.inference_mode():
             logits, trace = model(images[:8], trace=True)

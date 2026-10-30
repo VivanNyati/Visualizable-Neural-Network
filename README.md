@@ -41,6 +41,9 @@ python train.py
 MNIST downloads on the first run. The dashboard includes:
 
 - Training loss and accuracy, accumulated within the current epoch.
+- Validation loss and accuracy at each completed epoch (coral dashed lines).
+  Dotted lines labeled E1, E2, etc. mark epoch ends; gaps in the training curves
+  show where the running averages reset. Validation progress appears in the status line.
 - All eight learned first-layer kernels, with blue negative and red positive weights.
 - First-layer feature maps for the first displayed image.
 - The full 10-by-64 output weight matrix.
