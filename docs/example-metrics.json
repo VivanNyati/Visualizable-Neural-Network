@@ -1,0 +1,35 @@
+{
+  "epochs_completed": 2,
+  "steps": 1720,
+  "seed": 42,
+  "interrupted": false,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.2914601079474796,
+      "train_accuracy": 0.9183454545454546,
+      "validation": {
+        "loss": 0.11169369812011719,
+        "accuracy": 0.9664,
+        "samples": 5000
+      }
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.07982666894942522,
+      "train_accuracy": 0.9758363636363636,
+      "validation": {
+        "loss": 0.07036167688369752,
+        "accuracy": 0.9806,
+        "samples": 5000
+      }
+    }
+  ],
+  "test": {
+    "loss": 0.05403664410952479,
+    "accuracy": 0.9812,
+    "samples": 10000
+  },
+  "train_samples": 55000,
+  "elapsed_seconds": 80.60900000000038
+}

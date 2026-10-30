@@ -1,46 +1,159 @@
-# Live Viz MNIST CNN 🧠
+# Digit Lab: Visualizable Neural Network
 
-A PyTorch Convolutional Neural Network (CNN) built from scratch to recognize handwritten digits (0-9). 
+A small PyTorch CNN with two separate workflows: watch it learn handwritten digits,
+then inspect how it processes an image of your own. The views display actual model
+tensors at a high level without rendering thousands of connections every batch.
 
-This project features a **real-time training dashboard** that visualizes the model's "brain" as it learns, showing the loss curve, changing weights, and live predictions on the fly.
+![Training dashboard](docs/training.png)
+![Image inspector](docs/prediction.png)
 
-##  Features
+## Setup
 
-*   **99% Accuracy**: Achieves high accuracy on the MNIST dataset.
-*   **Live Dashboard**: A Matplotlib window that updates in real-time during training.
-    *   **Loss Curve**: Watch the error rate drop live.
-    *   **Weight Visualization**: See the "filters" of the first convolutional layer evolve.
-    *   **Live Predictions**: See the AI guess numbers in real-time (Green = Correct, Red = Wrong).
-*   **Progress Tracking**: Terminal scanning bar using `tqdm`.
-*   **GPU Acceleration**: Automatically detects and uses CUDA (NVIDIA) or MPS (Mac M-Series) if available.
+Use Python 3.11 or 3.12 with a desktop GUI. In the repository directory:
 
-## How to Run
-
-```bash
-
-Clone this repository or download the CNN.py file.
-Open your terminal or command prompt.
-pip install torch torchvision matplotlib tqdm numpy
-Run the program.
-
+```sh
+python -m venv .venv
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# macOS / Linux: source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-Note: The first time you run this, it will automatically download the MNIST dataset (approx. 60MB) to a ./data folder.
+For a smaller CPU-only installation, install PyTorch first:
 
- Understanding the Dashboard
+```sh
+python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r requirements.txt
+```
 
-When the training starts, a popup window will appear containing three sections:
+For GPU builds, use the appropriate installation command from
+[PyTorch](https://pytorch.org/get-started/locally/). The app selects CUDA, MPS, or CPU
+automatically; `--device cpu` overrides this. Linux desktop users may need their
+distribution's `python3-tk` package. A notebook's inline plotting backend does not
+provide the live desktop window; run the commands in a terminal.
 
-Top (Loss Curve): This line tracks the "Loss" (error). You want this line to go down and to the right. If it flattens out near 0, the model has finished learning.
+## 1. Train with live visualization
 
-Middle (Layer 1 Filters): This strip shows the raw weights of the first Neural Network layer. Initially, it looks like grey static noise. As training progresses, you may see patterns emerge as the AI learns to detect edges and curves.
+```sh
+python train.py
+```
 
-Bottom (Live Predictions): A sample of 8 images from the current training batch.
+MNIST downloads on the first run. The dashboard includes:
 
-Text Color Green: The AI predicted correctly.
+- Training loss and accuracy, accumulated within the current epoch.
+- All eight learned first-layer kernels, with blue negative and red positive weights.
+- First-layer feature maps for the first displayed image.
+- The full 10-by-64 output weight matrix.
+- Up to eight images with predicted and true labels.
+- **Pause / Resume** and **Stop & save** controls. Closing the window also stops
+  training and saves current weights after finishing the current batch.
 
-Text Color Red: The AI predicted incorrectly.
+The architecture is `1x28x28 -> Conv(8) -> ReLU -> Pool -> Conv(16) -> ReLU -> Pool
+-> Linear(64) -> ReLU -> Linear(10)`: **52,138 parameters**. There is no dropout,
+so the displayed forward pass matches training behavior without stochastic masks.
 
-📝 License
+Defaults: four epochs, batches of 64, Adam at 0.001, two CPU threads, and at most
+one dashboard redraw per second. Event handling runs between batches. Increase
+the redraw interval or limit samples for slower machines:
 
-Free to use for educational purposes.
+```sh
+python train.py --epochs 2 --max-train-samples 10000 --viz-seconds 2
+```
+
+Training uses a seeded 55,000 / 5,000 training/validation split. Validation runs
+after each completed epoch. The separate 10,000-image test set is evaluated at
+the end. `--max-eval-samples 500` limits both evaluation sets for quick checks;
+results from that setting are subset results. No particular accuracy is guaranteed.
+
+Outputs (relative to the source directory by default):
+
+- `checkpoints/mnist.pt`: current weights, architecture version and training metadata.
+- `runs/latest/metrics.json`: epoch history, final test metrics and interruption status.
+- `runs/latest/training.png`: final dashboard snapshot.
+
+Checkpoints are written atomically each completed epoch and again at the end,
+including a normal stop or Ctrl+C during training. They support prediction, not
+optimizer-state resume. Starting a new training run creates a fresh model and
+overwrites these defaults; use `--checkpoint` and `--run-dir` to keep separate runs.
+A stop before the first optimizer step does not save an untrained checkpoint.
+
+For a server or headless run:
+
+```sh
+python train.py --no-ui --epochs 2
+```
+
+## 2. Inspect an image
+
+```sh
+python predict.py "path/to/digit.png"
+# Included MNIST example:
+python predict.py examples/digit.png
+# Or open a file picker:
+python predict.py
+```
+
+Use an image containing **one handwritten digit, 0 through 9** with a plain,
+contrasting background and space around the digit. This is an MNIST classifier;
+it does not recognize general objects, words, or multiple digits. Prediction runs
+entirely from the checkpoint and does not download MNIST.
+
+The loader applies EXIF orientation, composites transparency onto white, detects
+ink polarity from the border, crops the foreground, fits it into 20 by 20 pixels,
+and centers its mass in a 28 by 28 canvas. Then it applies the same `[-1, 1]`
+normalization used in training. Check the normalized input panel if results look
+unexpected. For unusual backgrounds, specify `--polarity dark` or `--polarity light`
+to describe the **ink** color. Photos with shadows or clutter need cleanup first.
+
+The inspector shows the processed input, a selectable first-layer kernel and its
+actual ReLU response, all 16 pooled second-layer feature maps, 64 hidden
+activations, signed contributions to the predicted digit, ten softmax scores,
+and input-gradient sensitivity. Drag the filter slider to inspect all eight kernels.
+
+**Reading the views:** a feature map shows where a learned filter responds.
+Contributions are exactly `hidden activation * chosen output weight`; their sum
+plus the output bias reconstructs that digit's raw score (logit). Sensitivity is
+the absolute gradient of that score with respect to input pixels. It describes
+local sensitivity, not a causal explanation. Softmax scores are not calibrated
+probabilities of correctness, especially for inputs unlike MNIST. Color scales
+adapt per panel/update, so compare signs and structure rather than brightness
+across different training frames. Weight colors preserve zero and sign.
+
+Save a dashboard, including without a desktop:
+
+```sh
+python predict.py digit.png --output runs/prediction.png
+python predict.py digit.png --no-ui --output runs/prediction.png
+```
+
+`python main.py train ...` and `python main.py predict ...` are equivalent entry
+points. Run `python train.py --help` or `python predict.py --help` for all options.
+
+## Code layout and checks
+
+| File | Purpose |
+| --- | --- |
+| `model.py` | CNN, traced forward pass, device selection, checkpoint format |
+| `train.py` | Data split, optimization, evaluation, stopping and saving |
+| `predict.py` | Image selection and inference command |
+| `images.py` | Preprocessing, activations, contributions, gradients |
+| `dashboard.py` | Persistent plot artists and interactive controls |
+| `test_core.py` | Forward tracing, weight updates, checkpoint and image tests |
+| `test_dashboard.py` | Headless rendering, small batches, filter slider |
+
+```sh
+python -m unittest discover -v
+```
+
+Only sampled images are copied for visualization, the plotted history is bounded
+to about 1,000 points, and no autograd graph is retained between display updates.
+Inference computes one forward pass and one input-gradient pass. Checkpoints use
+the restricted `weights_only=True` loader; load checkpoints from trusted sources.
+Old checkpoints from a different architecture are not compatible.
+
+Reference: [PyTorch model saving/loading](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html)
+and [Matplotlib widgets](https://matplotlib.org/stable/api/widgets_api.html).
+
+## License
+
+Free to use for educational purposes, consistent with the original project notice.
