@@ -68,6 +68,7 @@ class TrainingDashboard:
                           fontsize=19, fontweight='bold', y=.975)
         self.status = self.fig.text(.055, .915, 'Preparing MNIST...', color=MUTED)
         self.save_status = self.fig.text(.055, .105, '', color=GREEN, fontsize=8)
+        self.best_status = self.fig.text(.055, .085, '', color=GREEN, fontsize=8)
         grid = self.fig.add_gridspec(2, 3, left=.055, right=.96, top=.85,
                                     bottom=.16, hspace=.45, wspace=.32)
         loss_ax, acc_ax, weights_ax, feature_ax, matrix_ax, sample_ax = [
@@ -164,6 +165,10 @@ class TrainingDashboard:
             self.fig.canvas.flush_events()
             while self.paused and not self.stopped:
                 plt.pause(.05)
+
+    def record_best(self, epoch, metrics, checkpoint):
+        self.best_status.set_text(f'Best validation: epoch {epoch}   |   '
+                                  f'Accuracy: {metrics["accuracy"]:.2%}   |   {Path(checkpoint).name}')
 
     def begin_epoch(self, epoch):
         # Break the curve where the cumulative training average resets.

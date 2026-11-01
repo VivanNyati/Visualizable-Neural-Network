@@ -73,6 +73,8 @@ results from that setting are subset results. No particular accuracy is guarante
 Outputs (relative to the source directory by default):
 
 - `checkpoints/mnist.pt`: current weights, architecture version and training metadata.
+- `checkpoints/mnist.best.pt`: weights from the epoch with the highest validation
+  accuracy in this run (the earliest epoch wins ties).
 - `runs/latest/metrics.json`: epoch history, final test metrics and interruption status.
 - `runs/latest/training.png`: final dashboard snapshot.
 
@@ -81,6 +83,21 @@ including a normal stop or Ctrl+C during training. They support prediction, not
 optimizer-state resume. Starting a new training run creates a fresh model and
 overwrites these defaults; use `--checkpoint` and `--run-dir` to keep separate runs.
 A stop before the first optimizer step does not save an untrained checkpoint.
+
+The dashboard and console report the best validation epoch and accuracy. The
+`best` entry in metrics and checkpoint metadata records its epoch, validation
+metrics, and file path. With `--checkpoint path/model.pt`, the best model is
+saved beside it as `path/model.best.pt`. Best weights are saved immediately on
+improvement and survive a later stop. No best model is selected until a full
+validation pass completes; files from older runs are left untouched until a new
+best model is saved. Use separate checkpoint paths to preserve experiments.
+
+The final test accuracy describes the **latest** weights, and never determines
+which model is best. To inspect an image with the best validation model:
+
+```sh
+python predict.py examples/digit.png --checkpoint checkpoints/mnist.best.pt
+```
 
 For a server or headless run:
 

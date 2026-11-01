@@ -49,6 +49,7 @@ def main(argv=None):
     parser.add_argument('--viz-seconds', type=float, default=1., help='Minimum seconds between redraws')
     parser.add_argument('--no-ui', action='store_true', help='Train without a GUI; save dashboard PNG')
     args = parser.parse_args(argv)
+    best_checkpoint = args.checkpoint.with_name(args.checkpoint.stem + '.best' + args.checkpoint.suffix)
     if not np.isfinite(args.lr) or args.lr <= 0:
         parser.error('--lr must be finite and positive')
     if not np.isfinite(args.viz_seconds) or args.viz_seconds < .1:
@@ -87,6 +88,7 @@ def main(argv=None):
     history, step, epochs_completed = [], 0, 0
     last_draw, started = 0., time.monotonic()
     interrupted = False
+    best = None
     args.run_dir.mkdir(parents=True, exist_ok=True)
     try:
         for epoch in range(args.epochs):
@@ -130,11 +132,20 @@ def main(argv=None):
             record = {'epoch': epochs_completed, 'train_loss': total_loss/count,
                       'train_accuracy': correct/count, 'validation': validation_metrics}
             history.append(record)
+            # Keep the earliest epoch on a tie; never select using test results.
+            if best is None or validation_metrics['accuracy'] > best['validation']['accuracy']:
+                candidate = {'epoch': epochs_completed, 'validation': validation_metrics,
+                             'checkpoint': str(best_checkpoint)}
+                save_checkpoint(model, best_checkpoint,
+                                {'epochs_completed': epochs_completed, 'steps': step,
+                                 'seed': args.seed, 'history': history, 'best': candidate})
+                best = candidate
+                dashboard.record_best(epochs_completed, validation_metrics, best_checkpoint)
             print(f'Epoch {epoch+1}: loss={total_loss/count:.4f}, '
                   f'validation accuracy={validation_metrics["accuracy"]:.2%}', flush=True)
             # A usable checkpoint survives even if a subsequent epoch is interrupted.
             save_checkpoint(model, args.checkpoint, {'epochs_completed': epochs_completed,
-                            'steps': step, 'seed': args.seed, 'history': history})
+                            'steps': step, 'seed': args.seed, 'history': history, 'best': best})
             if dashboard.stopped:
                 interrupted = True
                 break
@@ -146,7 +157,8 @@ def main(argv=None):
     test_metrics = evaluate(model, test_loader, device, dashboard.pump) if step else None
     metadata = {'epochs_completed': epochs_completed, 'steps': step, 'seed': args.seed,
                 'interrupted': interrupted, 'history': history, 'test': test_metrics,
-                'train_samples': len(train), 'elapsed_seconds': time.monotonic()-started}
+                'train_samples': len(train), 'elapsed_seconds': time.monotonic()-started,
+                'best': best}
     if step:
         save_checkpoint(model, args.checkpoint, metadata)
     (args.run_dir / 'metrics.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
@@ -157,6 +169,11 @@ def main(argv=None):
                      args.checkpoint if step else None)
     export(dashboard.fig, args.run_dir / 'training.png')
     print(f'{status}. {suffix}. Checkpoint: {args.checkpoint if step else "not saved"}', flush=True)
+    if best is not None:
+        print(f'Best validation model: epoch {best["epoch"]}, '
+              f'accuracy={best["validation"]["accuracy"]:.2%}. Checkpoint: {best_checkpoint}', flush=True)
+    else:
+        print('No best model selected: no completed validation pass in this run.', flush=True)
     if not args.no_ui and plt.fignum_exists(dashboard.fig.number):
         plt.ioff()
         plt.show()
