@@ -8,7 +8,9 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Subset, random_split
 from torchvision import datasets, transforms
-from model import DigitNet, ROOT, DEFAULT_CHECKPOINT, get_device, save_checkpoint
+from model import DigitNet, ROOT, get_device, save_checkpoint
+from runs import create_run, write_summary
+from datetime import datetime, timezone
 
 
 def positive(value):
@@ -42,18 +44,27 @@ def main(argv=None):
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--device', choices=['auto', 'cpu', 'cuda', 'mps'], default='auto')
     parser.add_argument('--data-dir', type=Path, default=ROOT / 'data')
-    parser.add_argument('--checkpoint', type=Path, default=DEFAULT_CHECKPOINT)
-    parser.add_argument('--run-dir', type=Path, default=ROOT / 'runs' / 'latest')
+    parser.add_argument('--checkpoint', type=Path, help='Override the checkpoint path (must be new)')
+    parser.add_argument('--run-dir', type=Path, help='New run folder; default: unique folder in runs/')
     parser.add_argument('--max-train-samples', type=positive)
     parser.add_argument('--max-eval-samples', type=positive)
     parser.add_argument('--viz-seconds', type=float, default=1., help='Minimum seconds between redraws')
     parser.add_argument('--no-ui', action='store_true', help='Train without a GUI; save dashboard PNG')
     args = parser.parse_args(argv)
-    best_checkpoint = args.checkpoint.with_name(args.checkpoint.stem + '.best' + args.checkpoint.suffix)
     if not np.isfinite(args.lr) or args.lr <= 0:
         parser.error('--lr must be finite and positive')
     if not np.isfinite(args.viz_seconds) or args.viz_seconds < .1:
         parser.error('--viz-seconds must be finite and at least 0.1')
+    try:
+        args.run_dir = create_run(args.run_dir)
+        args.checkpoint = (args.checkpoint or args.run_dir / 'mnist.pt').resolve()
+        best_checkpoint = args.checkpoint.with_name(args.checkpoint.stem + '.best' + args.checkpoint.suffix)
+        if args.checkpoint.exists() or best_checkpoint.exists():
+            raise ValueError('Checkpoint already exists. Choose a new --checkpoint to preserve saved models.')
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    created = datetime.now(timezone.utc).isoformat()
+    print(f'Run folder: {args.run_dir}', flush=True)
     if args.no_ui:
         import matplotlib
         matplotlib.use('Agg')
@@ -162,6 +173,7 @@ def main(argv=None):
     if step:
         save_checkpoint(model, args.checkpoint, metadata)
     (args.run_dir / 'metrics.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
+    write_summary(args.run_dir, created, args.checkpoint, best, metadata)
     status = 'Stopped' if interrupted else 'Finished'
     suffix = f'Test accuracy: {test_metrics["accuracy"]:.2%}' if test_metrics else 'No training steps'
     dashboard.finish(f'{status} & saved   |   {suffix}   |   {step} optimizer steps'

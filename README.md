@@ -72,16 +72,20 @@ results from that setting are subset results. No particular accuracy is guarante
 
 Outputs (relative to the source directory by default):
 
-- `checkpoints/mnist.pt`: current weights, architecture version and training metadata.
-- `checkpoints/mnist.best.pt`: weights from the epoch with the highest validation
+- `runs/<run-name>/mnist.pt`: current weights, architecture version and training metadata.
+- `runs/<run-name>/mnist.best.pt`: weights from the epoch with the highest validation
   accuracy in this run (the earliest epoch wins ties).
-- `runs/latest/metrics.json`: epoch history, final test metrics and interruption status.
-- `runs/latest/training.png`: final dashboard snapshot.
+- `runs/<run-name>/metrics.json`: epoch history, final test metrics and interruption status.
+- `runs/<run-name>/training.png`: final dashboard snapshot.
+- `runs/<run-name>/run.json`: run summary and checkpoint locations for model selection.
 
 Checkpoints are written atomically each completed epoch and again at the end,
 including a normal stop or Ctrl+C during training. They support prediction, not
-optimizer-state resume. Starting a new training run creates a fresh model and
-overwrites these defaults; use `--checkpoint` and `--run-dir` to keep separate runs.
+optimizer-state resume. Each training run creates a fresh model in a unique folder
+named with a timestamp and random suffix. The console prints its location.
+Use `--run-dir runs/my-experiment` to name a run. Existing result folders and
+checkpoint files are rejected so an experiment cannot silently overwrite another.
+`--checkpoint` can still specify a new checkpoint path outside the run folder.
 A stop before the first optimizer step does not save an untrained checkpoint.
 
 The dashboard and console report the best validation epoch and accuracy. The
@@ -96,7 +100,7 @@ The final test accuracy describes the **latest** weights, and never determines
 which model is best. To inspect an image with the best validation model:
 
 ```sh
-python predict.py examples/digit.png --checkpoint checkpoints/mnist.best.pt
+python predict.py examples/digit.png --run latest --weights best
 ```
 
 For a server or headless run:
@@ -113,12 +117,26 @@ python predict.py "path/to/digit.png"
 python predict.py examples/digit.png
 # Or open a file picker:
 python predict.py
+# List saved runs and their best validation results:
+python predict.py --list-runs
+# Select a run by the name printed in that list:
+python predict.py examples/digit.png --run YOUR_RUN_NAME --weights best
 ```
 
 Use an image containing **one handwritten digit, 0 through 9** with a plain,
 contrasting background and space around the digit. This is an MNIST classifier;
 it does not recognize general objects, words, or multiple digits. Prediction runs
 entirely from the checkpoint and does not download MNIST.
+
+Prediction defaults to the latest saved run's latest weights. `--weights best`
+selects that run's best validation checkpoint; it reports an error if validation
+never completed. Use `--runs-dir path/to/runs` to list or select runs elsewhere.
+`--checkpoint path/to/model.pt` loads older or standalone models directly and
+cannot be combined with `--run`. With no saved runs, the legacy
+`checkpoints/mnist.pt` is still used if it exists. Runs made before run summaries
+were introduced remain accessible through `--checkpoint`. Listing skips unreadable
+summaries and runs whose latest checkpoint is missing. Keep run folders in place:
+their summaries record absolute checkpoint paths.
 
 The loader applies EXIF orientation, composites transparency onto white, detects
 ink polarity from the border, crops the foreground, fits it into 20 by 20 pixels,
@@ -165,6 +183,7 @@ See the [improvement roadmap](docs/roadmap.md) for the next ten focused changes.
 | `test_core.py` | Forward tracing, weight updates, checkpoint and image tests |
 | `test_dashboard.py` | Headless rendering, small batches, filter slider |
 | `test_train.py` | Completed and interrupted training checkpoint checks |
+| `runs.py`, `test_runs.py` | Run summaries, preservation, and model selection |
 
 ```sh
 python -m unittest discover -v
