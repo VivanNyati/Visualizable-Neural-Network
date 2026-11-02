@@ -1,5 +1,9 @@
 """Headless rendering and interaction checks: python -m unittest -v test_dashboard."""
 import unittest
+import tempfile
+from pathlib import Path
+import numpy as np
+from PIL import Image, ImageDraw
 from unittest.mock import patch
 import matplotlib
 matplotlib.use('Agg')
@@ -7,11 +11,65 @@ import matplotlib.pyplot as plt
 from matplotlib.backend_bases import MouseEvent
 import torch
 from dashboard import TrainingDashboard, PredictionDashboard
-from images import explain
-from model import DigitNet
+from images import explain, prepare_image
+from model import DigitNet, ROOT
 
 
 class DashboardTests(unittest.TestCase):
+    def test_open_image_refreshes_all_panels_and_preserves_filter(self):
+        torch.set_num_threads(2)
+        model = DigitNet().eval()
+        image = prepare_image(ROOT / 'examples' / 'digit.png')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'one.png'
+            drawn = Image.new('L', (50, 50), 'white')
+            ImageDraw.Draw(drawn).line((25, 8, 25, 42), fill='black', width=5)
+            drawn.save(path)
+            view = PredictionDashboard(model, image, explain(model, image), 'first.png',
+                                       choose_image=lambda: path, polarity='dark')
+            try:
+                view.slider.set_val(6)
+                axes = len(view.fig.axes)
+                expected_image = prepare_image(path, 'dark')
+                expected = explain(model, expected_image)
+                self.click(view, view.open_button)
+                self.assertIs(view.model, model)
+                self.assertEqual(len(view.fig.axes), axes)
+                self.assertEqual(view.slider.val, 6)
+                self.assertIn('one.png', view.header.get_text())
+                np.testing.assert_allclose(view.input.get_array(), expected_image[0, 0].numpy() * .5 + .5)
+                np.testing.assert_allclose(view.response.get_array(), expected['activations']['conv1'][6])
+                np.testing.assert_allclose(view.hidden.get_array(), expected['activations']['hidden'].reshape(8, 8))
+                np.testing.assert_allclose(view.contributions.get_array(), expected['contributions'].reshape(8, 8))
+                np.testing.assert_allclose(view.saliency.get_array(), expected['saliency'])
+                np.testing.assert_allclose([bar.get_width() for bar in view.bars], expected['probabilities'])
+                self.assertIn(f'{expected["logit"]:+.3f}', view.details.get_text())
+            finally:
+                plt.close(view.fig)
+
+    def test_cancel_and_invalid_images_keep_previous_prediction(self):
+        model = DigitNet().eval()
+        image = prepare_image(ROOT / 'examples' / 'digit.png')
+        result = explain(model, image)
+        view = PredictionDashboard(model, image, result, 'original.png', choose_image=lambda: None)
+        try:
+            header = view.header.get_text()
+            self.click(view, view.open_button)
+            self.assertEqual(view.message.get_text(), '')
+            for chooser in [lambda: ROOT / 'missing-image.png',
+                            lambda: ROOT / 'README.md']:
+                view.choose_image = chooser
+                self.click(view, view.open_button)
+                self.assertIs(view.result, result)
+                self.assertEqual(view.header.get_text(), header)
+                self.assertIn('Could not open image', view.message.get_text())
+                self.assertTrue(plt.fignum_exists(view.fig.number))
+            view.choose_image = lambda: ROOT / 'examples' / 'digit.png'
+            self.click(view, view.open_button)
+            self.assertEqual(view.message.get_text(), '')
+        finally:
+            plt.close(view.fig)
+
     def test_validation_points_epoch_gaps_and_loss_scale(self):
         model = DigitNet()
         view = TrainingDashboard(model, live=False)

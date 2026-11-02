@@ -84,7 +84,9 @@ def main(argv=None):
         result = explain(model, image)
     except (OSError, ValueError, RuntimeError) as error:
         parser.error(str(error))
-    view = PredictionDashboard(model, image, result, Path(path).name)
+    view = PredictionDashboard(model, image, result, Path(path).name,
+                               choose_image=None if args.no_ui else choose_image,
+                               polarity=args.polarity)
     digit = result['prediction']
     print(f'Prediction: {digit} | softmax score: {result["probabilities"][digit]:.2%}')
     if args.output:

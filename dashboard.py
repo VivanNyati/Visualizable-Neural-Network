@@ -238,32 +238,33 @@ class TrainingDashboard:
 
 
 class PredictionDashboard:
-    def __init__(self, model, image, result, name):
+    def __init__(self, model, image, result, name, choose_image=None, polarity='auto'):
         theme()
         self.model, self.result = model, result
+        self.choose_image, self.polarity = choose_image, polarity
         self.fig = plt.figure(figsize=(15, 10))
         self.fig.canvas.manager.set_window_title('Digit Lab | Image inspector')
         self.fig.suptitle('DIGIT LAB  /  INSIDE A PREDICTION', x=.055, ha='left',
                           fontsize=19, fontweight='bold', y=.975)
         digit = result['prediction']
-        self.fig.text(.055, .925, f'{name[:65]}   |   Prediction: {digit}   |   '
+        self.header = self.fig.text(.055, .925, f'{name[:45]}   |   Prediction: {digit}   |   '
             f'Softmax score: {result["probabilities"][digit]:.2%}', color=CYAN, fontsize=12)
         grid = self.fig.add_gridspec(2, 4, left=.055, right=.96, top=.85,
                                     bottom=.23, hspace=.48, wspace=.4)
         axes = [self.fig.add_subplot(grid[r, c]) for r in range(2) for c in range(4)]
-        heat(axes[0], array(image[0, 0]) * .5 + .5, '01 / Normalized input')
+        self.input = heat(axes[0], array(image[0, 0]) * .5 + .5, '01 / Normalized input')
         self.kernel = heat(axes[1], array(model.conv1.weight[0, 0]), '02 / Filter 0', True)
         self.response = heat(axes[2], result['activations']['conv1'][0], '03 / Its ReLU response')
-        heat(axes[3], mosaic(result['activations']['pool2']), '04 / Pooled features | 16 x 7 x 7')
-        heat(axes[4], result['activations']['hidden'].reshape(8, 8), '05 / Hidden units | 64')
-        heat(axes[5], result['contributions'].reshape(8, 8), '06 / Contributions to chosen digit', True)
-        axes[6].barh(range(10), result['probabilities'], color=[CYAN if d == digit else
+        self.pooled = heat(axes[3], mosaic(result['activations']['pool2']), '04 / Pooled features | 16 x 7 x 7')
+        self.hidden = heat(axes[4], result['activations']['hidden'].reshape(8, 8), '05 / Hidden units | 64')
+        self.contributions = heat(axes[5], result['contributions'].reshape(8, 8), '06 / Contributions to chosen digit', True)
+        self.bars = axes[6].barh(range(10), result['probabilities'], color=[CYAN if d == digit else
                      '#314b70' for d in range(10)])
         axes[6].set(yticks=range(10), xlim=(0, 1), xlabel='Softmax score')
         axes[6].set_title('07 / Class scores', loc='left', pad=10)
         axes[6].invert_yaxis()
-        heat(axes[7], result['saliency'], '08 / Pixel sensitivity | gradient')
-        self.fig.text(.055, .145,
+        self.saliency = heat(axes[7], result['saliency'], '08 / Pixel sensitivity | gradient')
+        self.details = self.fig.text(.055, .145,
             'FLOW   28 x 28 input  >  8 filters + pool  >  16 filters + pool  >  64 units  >  10 digit scores\n'
             f'Contributions are activation x output weight; their sum + bias ({result["bias"]:+.3f}) '
             f'= chosen logit ({result["logit"]:+.3f}).\n'
@@ -274,6 +275,43 @@ class PredictionDashboard:
         self.slider.on_changed(self.select_filter)
         self.fig.text(.64, .065, 'Blue / red = signed weights or contributions\n'
                       'Bright = stronger activation or sensitivity', color=MUTED, fontsize=9)
+        self.message = self.fig.text(.055, .885, '', color=RED, fontsize=9)
+        if choose_image is not None:
+            self.open_button = Button(self.fig.add_axes([.83, .90, .13, .04]),
+                                      'Open image', color=PANEL, hovercolor='#30415c')
+            self.open_button.on_clicked(self.open_image)
+
+    def open_image(self, _):
+        from images import prepare_image, explain
+        try:
+            path = self.choose_image()
+            if not path:
+                return
+            image = prepare_image(path, self.polarity).to(next(self.model.parameters()).device)
+            result = explain(self.model, image)
+        except (OSError, ValueError, RuntimeError) as error:
+            self.message.set_text(f'Could not open image: {str(error)[:140]}')
+            self.fig.canvas.draw_idle()
+            return
+        self.result = result
+        digit = result['prediction']
+        self.header.set_text(f'{Path(path).name[:45]}   |   Prediction: {digit}   |   '
+                             f'Softmax score: {result["probabilities"][digit]:.2%}')
+        self.input.set_data(array(image[0, 0]) * .5 + .5)
+        set_heat(self.pooled, mosaic(result['activations']['pool2']))
+        set_heat(self.hidden, result['activations']['hidden'].reshape(8, 8))
+        set_heat(self.contributions, result['contributions'].reshape(8, 8), True)
+        set_heat(self.saliency, result['saliency'])
+        for index, bar in enumerate(self.bars):
+            bar.set_width(result['probabilities'][index])
+            bar.set_color(CYAN if index == digit else '#314b70')
+        self.details.set_text(
+            'FLOW   28 x 28 input  >  8 filters + pool  >  16 filters + pool  >  64 units  >  10 digit scores\n'
+            f'Contributions are activation x output weight; their sum + bias ({result["bias"]:+.3f}) '
+            f'= chosen logit ({result["logit"]:+.3f}).\n'
+            'Sensitivity shows local changes in that logit, not a causal explanation. Softmax scores are not calibrated certainty.')
+        self.message.set_text('')
+        self.select_filter(self.slider.val)
 
     def select_filter(self, value):
         index = int(value)

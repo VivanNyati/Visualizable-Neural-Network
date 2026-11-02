@@ -149,6 +149,12 @@ The inspector shows the processed input, a selectable first-layer kernel and its
 actual ReLU response, all 16 pooled second-layer feature maps, 64 hidden
 activations, signed contributions to the predicted digit, ten softmax scores,
 and input-gradient sensitivity. Drag the filter slider to inspect all eight kernels.
+Click **Open image** to inspect another digit in the same window with the same
+loaded model and selected filter. Cancelling keeps the current prediction;
+invalid images display an error while leaving the previous result available.
+The `--polarity` setting also applies to images opened with this button.
+`--output` saves the initial inspection; use the window's Save toolbar control
+to export a later image's inspection.
 
 **Reading the views:** a feature map shows where a learned filter responds.
 Contributions are exactly `hidden activation * chosen output weight`; their sum
