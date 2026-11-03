@@ -16,6 +16,60 @@ from model import DigitNet, ROOT
 
 
 class DashboardTests(unittest.TestCase):
+    def test_drawing_events_predict_clear_and_reopen(self):
+        from io import BytesIO
+        torch.set_num_threads(2)
+        model = DigitNet().eval()
+        image = prepare_image(ROOT / 'examples' / 'digit.png')
+        view = PredictionDashboard(model, image, explain(model, image), 'initial.png',
+                                   choose_image=lambda: None, polarity='dark')
+        try:
+            with patch('matplotlib.figure.Figure.show'):
+                self.click(view, view.draw_button)
+                drawing = view.drawing
+                self.click(view, view.draw_button)
+                self.assertIs(view.drawing, drawing)
+            drawing.fig.canvas.draw()
+
+            def event(name, point, button=1):
+                x, y = drawing.ax.transData.transform(point)
+                drawing.fig.canvas.callbacks.process(name, MouseEvent(
+                    name, drawing.fig.canvas, x, y, button=button))
+
+            event('button_press_event', (140, 40), button=3)
+            self.assertFalse(np.asarray(drawing.ink).any())
+            event('button_press_event', (140, 40))
+            event('motion_notify_event', (140, 240))
+            event('button_release_event', (140, 240))
+            ink = np.asarray(drawing.ink).copy()
+            event('motion_notify_event', (220, 240))
+            np.testing.assert_array_equal(np.asarray(drawing.ink), ink)
+            buffer = BytesIO()
+            drawing.ink.save(buffer, format='PNG')
+            buffer.seek(0)
+            expected_image = prepare_image(buffer, 'light')
+            expected = explain(model, expected_image)
+            view.slider.set_val(4)
+            self.click(drawing, drawing.predict_button)
+            self.assertIn('Drawn digit', view.header.get_text())
+            self.assertEqual(view.slider.val, 4)
+            np.testing.assert_allclose(view.input.get_array(), expected_image[0, 0].numpy() * .5 + .5)
+            np.testing.assert_allclose(view.result['probabilities'], expected['probabilities'])
+            self.assertIn('Prediction updated', drawing.status.get_text())
+            saved = view.result
+            self.click(drawing, drawing.clear_button)
+            self.assertFalse(np.asarray(drawing.ink).any())
+            self.click(drawing, drawing.predict_button)
+            self.assertIn('blank', drawing.status.get_text())
+            self.assertIs(view.result, saved)
+            plt.close(drawing.fig)
+            with patch('matplotlib.figure.Figure.show'):
+                self.click(view, view.draw_button)
+            self.assertIsNot(view.drawing, drawing)
+        finally:
+            view.close_drawing(None)
+            plt.close(view.fig)
+
     def test_open_image_refreshes_all_panels_and_preserves_filter(self):
         torch.set_num_threads(2)
         model = DigitNet().eval()

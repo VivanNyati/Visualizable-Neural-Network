@@ -156,6 +156,14 @@ The `--polarity` setting also applies to images opened with this button.
 `--output` saves the initial inspection; use the window's Save toolbar control
 to export a later image's inspection.
 
+Click **Draw digit** in the inspector to open a drawing canvas. Hold the left
+mouse button to draw one digit, then click **Predict**. The inspector updates
+with the prediction, normalized 28-by-28 input, and all model explanations.
+**Clear** resets the canvas for another attempt. A blank canvas shows an error
+and preserves the previous prediction. Drawing uses the same crop, resize,
+centering, and normalization as image files, with light ink on a dark background
+regardless of the file `--polarity` setting. The model is reused without retraining.
+
 **Reading the views:** a feature map shows where a learned filter responds.
 Contributions are exactly `hidden activation * chosen output weight`; their sum
 plus the output bias reconstructs that digit's raw score (logit). Sensitivity is

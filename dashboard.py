@@ -242,6 +242,7 @@ class PredictionDashboard:
         theme()
         self.model, self.result = model, result
         self.choose_image, self.polarity = choose_image, polarity
+        self.drawing = None
         self.fig = plt.figure(figsize=(15, 10))
         self.fig.canvas.manager.set_window_title('Digit Lab | Image inspector')
         self.fig.suptitle('DIGIT LAB  /  INSIDE A PREDICTION', x=.055, ha='left',
@@ -280,6 +281,29 @@ class PredictionDashboard:
             self.open_button = Button(self.fig.add_axes([.83, .90, .13, .04]),
                                       'Open image', color=PANEL, hovercolor='#30415c')
             self.open_button.on_clicked(self.open_image)
+            self.draw_button = Button(self.fig.add_axes([.68, .90, .13, .04]),
+                                      'Draw digit', color=PANEL, hovercolor='#30415c')
+            self.draw_button.on_clicked(self.draw_digit)
+            self.fig.canvas.mpl_connect('close_event', self.close_drawing)
+
+    def close_drawing(self, _):
+        if self.drawing is not None:
+            plt.close(self.drawing.fig)
+
+    def draw_digit(self, _):
+        if self.drawing is None or not plt.fignum_exists(self.drawing.fig.number):
+            self.drawing = DigitCanvas(self.predict_drawing)
+        self.drawing.fig.show()
+
+    def predict_drawing(self, drawing):
+        from io import BytesIO
+        from images import prepare_image, explain
+        buffer = BytesIO()
+        drawing.save(buffer, format='PNG')
+        buffer.seek(0)
+        # The canvas always uses light ink, independent of file polarity options.
+        image = prepare_image(buffer, 'light').to(next(self.model.parameters()).device)
+        self.update_prediction(image, explain(self.model, image), 'Drawn digit')
 
     def open_image(self, _):
         from images import prepare_image, explain
@@ -293,9 +317,12 @@ class PredictionDashboard:
             self.message.set_text(f'Could not open image: {str(error)[:140]}')
             self.fig.canvas.draw_idle()
             return
+        self.update_prediction(image, result, Path(path).name)
+
+    def update_prediction(self, image, result, name):
         self.result = result
         digit = result['prediction']
-        self.header.set_text(f'{Path(path).name[:45]}   |   Prediction: {digit}   |   '
+        self.header.set_text(f'{name[:45]}   |   Prediction: {digit}   |   '
                              f'Softmax score: {result["probabilities"][digit]:.2%}')
         self.input.set_data(array(image[0, 0]) * .5 + .5)
         set_heat(self.pooled, mosaic(result['activations']['pool2']))
@@ -318,4 +345,77 @@ class PredictionDashboard:
         set_heat(self.kernel, array(self.model.conv1.weight[index, 0]), True)
         set_heat(self.response, self.result['activations']['conv1'][index])
         self.kernel.axes.set_title(f'02 / Filter {index}', loc='left', pad=10)
+        self.fig.canvas.draw_idle()
+
+
+class DigitCanvas:
+    """A high-resolution ink buffer with round strokes, separate from model input."""
+    def __init__(self, on_predict):
+        from PIL import Image
+        self.on_predict = on_predict
+        self.ink = Image.new('L', (280, 280), 0)
+        self.previous = None
+        self.fig = plt.figure(figsize=(5, 6), facecolor=BG)
+        self.fig.canvas.manager.set_window_title('Digit Lab | Draw a digit')
+        self.ax = self.fig.add_axes([.1, .23, .8, .67])
+        self.artist = self.ax.imshow(np.asarray(self.ink), cmap='gray', vmin=0, vmax=255)
+        self.ax.set(xticks=[], yticks=[], title='Draw one digit with the left mouse button')
+        self.status = self.fig.text(.1, .17, 'Draw 0–9, then click Predict.', color=TEXT, fontsize=9)
+        self.clear_button = Button(self.fig.add_axes([.1, .06, .35, .07]),
+                                   'Clear', color=PANEL, hovercolor='#30415c')
+        self.predict_button = Button(self.fig.add_axes([.55, .06, .35, .07]),
+                                     'Predict', color=PANEL, hovercolor='#30415c')
+        self.clear_button.on_clicked(self.clear)
+        self.predict_button.on_clicked(self.predict)
+        for name, callback in [('button_press_event', self.press),
+                               ('motion_notify_event', self.move),
+                               ('button_release_event', self.release)]:
+            self.fig.canvas.mpl_connect(name, callback)
+
+    def point(self, event):
+        if event.inaxes != self.ax or event.xdata is None or event.ydata is None:
+            return None
+        return (int(np.clip(event.xdata, 0, 279)), int(np.clip(event.ydata, 0, 279)))
+
+    def stroke(self, point):
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(self.ink)
+        if self.previous is not None:
+            draw.line([self.previous, point], fill=255, width=18)
+        x, y = point
+        draw.ellipse((x-9, y-9, x+9, y+9), fill=255)
+        self.previous = point
+        self.artist.set_data(np.asarray(self.ink))
+        self.status.set_text('Click Predict to inspect this drawing.')
+        self.fig.canvas.draw_idle()
+
+    def press(self, event):
+        if event.button == 1 and self.point(event) is not None:
+            self.previous = None
+            self.stroke(self.point(event))
+
+    def move(self, event):
+        if self.previous is not None:
+            point = self.point(event)
+            if point is None:
+                self.previous = None
+            else:
+                self.stroke(point)
+
+    def release(self, _):
+        self.previous = None
+
+    def clear(self, _):
+        self.ink.paste(0, (0, 0, 280, 280))
+        self.previous = None
+        self.artist.set_data(np.asarray(self.ink))
+        self.status.set_text('Canvas cleared. Draw another digit.')
+        self.fig.canvas.draw_idle()
+
+    def predict(self, _):
+        try:
+            self.on_predict(self.ink.copy())
+            self.status.set_text('Prediction updated in the image inspector.')
+        except (OSError, ValueError, RuntimeError) as error:
+            self.status.set_text(str(error)[:85])
         self.fig.canvas.draw_idle()
