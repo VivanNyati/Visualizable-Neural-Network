@@ -183,6 +183,31 @@ python predict.py digit.png --no-ui --output runs/prediction.png
 `python main.py train ...` and `python main.py predict ...` are equivalent entry
 points. Run `python train.py --help` or `python predict.py --help` for all options.
 
+## 3. Evaluate a saved model
+
+```sh
+python evaluate.py --run latest --weights best
+# Older or standalone checkpoint:
+python evaluate.py --checkpoint path/to/model.pt
+# Quick subset check and exports without a desktop window:
+python evaluate.py --run latest --max-eval-samples 500 --no-ui
+```
+
+Evaluation loads existing weights and uses MNIST's separate test set, downloading
+it if needed. It does not train or modify the checkpoint. The dashboard shows
+confusion counts (true digits in rows, predictions in columns), accuracy and
+sample counts per digit, and the first eight mistakes in dataset order. Digits
+absent from a subset display N/A rather than zero accuracy.
+
+Results are clearly labeled **Full test set** or **Test subset** with the evaluated
+image count. Subsets use the first N test images. Each evaluation saves
+`evaluation.png` and `evaluation.json` in a new folder under `runs/evaluations/`.
+JSON includes checkpoint identity, loss, accuracy, confusion counts, per-digit
+metrics, and indices/labels for the displayed mistakes. Use `--output-dir` to
+choose a destination; existing evaluation outputs are protected from overwriting.
+The same `--run`, `--weights`, and `--runs-dir` selection options work as in
+prediction. `python main.py evaluate ...` is an equivalent entry point.
+
 ## Code layout and checks
 
 See the [improvement roadmap](docs/roadmap.md) for the next ten focused changes.
@@ -197,6 +222,7 @@ See the [improvement roadmap](docs/roadmap.md) for the next ten focused changes.
 | `test_core.py` | Forward tracing, weight updates, checkpoint and image tests |
 | `test_dashboard.py` | Headless rendering, small batches, filter slider |
 | `test_train.py` | Completed and interrupted training checkpoint checks |
+| `evaluate.py`, `test_evaluate.py` | Saved-model test metrics and evaluation dashboard |
 | `runs.py`, `test_runs.py` | Run summaries, preservation, and model selection |
 
 ```sh
