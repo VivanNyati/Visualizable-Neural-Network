@@ -183,6 +183,13 @@ python predict.py digit.png --no-ui --output runs/prediction.png
 `python main.py train ...` and `python main.py predict ...` are equivalent entry
 points. Run `python train.py --help` or `python predict.py --help` for all options.
 
+The training and prediction dashboards scale their text when resized. Headers,
+controls, and explanations occupy separate bands, and long panel titles use two
+lines. Training examples show P (prediction) and T (true label) on each tile,
+with green for correct results and pink for mistakes. Layouts were visually
+checked at 1024 x 768, 1280 x 800, and 1500 x 1000; larger windows offer more
+room for inspecting the maps. PNG exports apply the same text sizing.
+
 ## 3. Evaluate a saved model
 
 ```sh

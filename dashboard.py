@@ -52,7 +52,32 @@ def set_heat(artist, data, signed=False):
 def export(fig, path):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if hasattr(fig, '_digit_lab_layout'):
+        fig._digit_lab_layout()
     fig.savefig(path, dpi=140)
+
+
+def responsive_text(fig):
+    """Scale the existing text on resize without rebuilding plots or widgets."""
+    from matplotlib.text import Text
+    reference = fig.get_size_inches().copy()
+    originals = {}
+
+    def resize(_=None):
+        scale = min(1., max(.7, min(fig.get_size_inches() / reference)))
+        for text in fig.findobj(Text):
+            if text not in originals:
+                originals[text] = text.get_fontsize()
+            text.set_fontsize(originals[text] * scale)
+        # Fit long status lines, paths, and explanations within the figure.
+        renderer = fig.canvas.get_renderer()
+        for text in fig.texts:
+            available = fig.bbox.width * (.97 - text.get_position()[0])
+            width = text.get_window_extent(renderer).width
+            if width > available > 0:
+                text.set_fontsize(max(6, text.get_fontsize() * available / width))
+    fig._digit_lab_layout = resize
+    fig.canvas.mpl_connect('resize_event', resize)
 
 
 class TrainingDashboard:
@@ -66,11 +91,11 @@ class TrainingDashboard:
         self.fig.canvas.manager.set_window_title('Digit Lab | Training')
         self.fig.suptitle('DIGIT LAB  /  LEARNING IN MOTION', x=.055, ha='left',
                           fontsize=19, fontweight='bold', y=.975)
-        self.status = self.fig.text(.055, .915, 'Preparing MNIST...', color=MUTED)
+        self.status = self.fig.text(.055, .875, 'Preparing MNIST...', color=MUTED)
         self.save_status = self.fig.text(.055, .105, '', color=GREEN, fontsize=8)
         self.best_status = self.fig.text(.055, .085, '', color=GREEN, fontsize=8)
-        grid = self.fig.add_gridspec(2, 3, left=.055, right=.96, top=.85,
-                                    bottom=.16, hspace=.45, wspace=.32)
+        grid = self.fig.add_gridspec(2, 3, left=.065, right=.96, top=.80,
+                                    bottom=.20, hspace=.65, wspace=.40)
         loss_ax, acc_ax, weights_ax, feature_ax, matrix_ax, sample_ax = [
             self.fig.add_subplot(grid[r, c]) for r in range(2) for c in range(3)]
         self.loss_line, = loss_ax.plot([], [], '.-', color=CYAN, lw=2, ms=3,
@@ -93,15 +118,19 @@ class TrainingDashboard:
         self.weight = heat(weights_ax, mosaic(array(model.conv1.weight[:, 0])),
                            '03 / Learned 3 x 3 filters', True)
         self.feature = heat(feature_ax, mosaic(np.zeros((8, 28, 28))),
-                            '04 / First-layer responses | sample 1')
+                            '04 / First-layer responses\nSample 1, eight filters')
         self.matrix = heat(matrix_ax, array(model.fc2.weight),
-                           '05 / Output weights | 10 digits x 64 units', True)
+                           '05 / Output weights\n10 digits x 64 units', True)
         self.samples = sample_ax.imshow(np.zeros((56, 112)), cmap='gray', vmin=0, vmax=1)
         sample_ax.set_title('06 / Current examples', loc='left', pad=10)
         sample_ax.set_xticks([])
         sample_ax.set_yticks([])
         self.sample_text = sample_ax.text(0, -.12, '', transform=sample_ax.transAxes,
                                           fontsize=8, color=MUTED, va='top')
+        self.sample_labels = [sample_ax.text((index % 4)*29 + 1, (index // 4)*29 + 1,
+                              '', fontsize=7, va='top', fontweight='bold',
+                              bbox=dict(facecolor=BG, edgecolor='none', alpha=.85, pad=1))
+                              for index in range(8)]
         self.fig.text(.055, .045,
             'WEIGHTS  blue = negative / red = positive     |     FEATURES  dark = quiet / bright = active\n'
             'All tiles use real tensors. Feature maps share a scale per panel; weight scales adapt per update.',
@@ -117,6 +146,7 @@ class TrainingDashboard:
             self.fig.canvas.mpl_connect('close_event', self.window_closed)
             plt.ion()
             plt.show(block=False)
+        responsive_text(self.fig)
 
     def toggle_pause(self, _):
         if self.stopped or self.finished:
@@ -228,9 +258,11 @@ class TrainingDashboard:
         self.samples.set_data(mosaic(tiles, 4))
         predictions = logits.argmax(1).tolist()
         truths = labels[:count].tolist()
-        lines = [f'{p}/{t}' + (' OK' if p == t else ' X') for p, t in zip(predictions, truths)]
-        self.sample_text.set_text('Prediction / label (left to right)\n' +
-                                  '   '.join(lines[:4]) + '\n' + '   '.join(lines[4:]))
+        for index, caption in enumerate(self.sample_labels):
+            caption.set_text(f'P{predictions[index]} / T{truths[index]}' if index < count else '')
+            if index < count:
+                caption.set_color(GREEN if predictions[index] == truths[index] else RED)
+        self.sample_text.set_text('P = predicted / T = true\nGreen = correct / pink = mistake')
         self.status.set_text(status)
         if self.live:
             self.fig.canvas.draw_idle()
@@ -250,21 +282,21 @@ class PredictionDashboard:
         digit = result['prediction']
         self.header = self.fig.text(.055, .925, f'{name[:45]}   |   Prediction: {digit}   |   '
             f'Softmax score: {result["probabilities"][digit]:.2%}', color=CYAN, fontsize=12)
-        grid = self.fig.add_gridspec(2, 4, left=.055, right=.96, top=.85,
-                                    bottom=.23, hspace=.48, wspace=.4)
+        grid = self.fig.add_gridspec(2, 4, left=.055, right=.96, top=.79,
+                                    bottom=.26, hspace=.65, wspace=.48)
         axes = [self.fig.add_subplot(grid[r, c]) for r in range(2) for c in range(4)]
         self.input = heat(axes[0], array(image[0, 0]) * .5 + .5, '01 / Normalized input')
         self.kernel = heat(axes[1], array(model.conv1.weight[0, 0]), '02 / Filter 0', True)
         self.response = heat(axes[2], result['activations']['conv1'][0], '03 / Its ReLU response')
-        self.pooled = heat(axes[3], mosaic(result['activations']['pool2']), '04 / Pooled features | 16 x 7 x 7')
+        self.pooled = heat(axes[3], mosaic(result['activations']['pool2']), '04 / Pooled features\n16 maps, each 7 x 7')
         self.hidden = heat(axes[4], result['activations']['hidden'].reshape(8, 8), '05 / Hidden units | 64')
-        self.contributions = heat(axes[5], result['contributions'].reshape(8, 8), '06 / Contributions to chosen digit', True)
+        self.contributions = heat(axes[5], result['contributions'].reshape(8, 8), '06 / Contributions\nTo the predicted digit', True)
         self.bars = axes[6].barh(range(10), result['probabilities'], color=[CYAN if d == digit else
                      '#314b70' for d in range(10)])
         axes[6].set(yticks=range(10), xlim=(0, 1), xlabel='Softmax score')
         axes[6].set_title('07 / Class scores', loc='left', pad=10)
         axes[6].invert_yaxis()
-        self.saliency = heat(axes[7], result['saliency'], '08 / Pixel sensitivity | gradient')
+        self.saliency = heat(axes[7], result['saliency'], '08 / Pixel sensitivity\nAbsolute input gradient')
         self.details = self.fig.text(.055, .145,
             'FLOW   28 x 28 input  >  8 filters + pool  >  16 filters + pool  >  64 units  >  10 digit scores\n'
             f'Contributions are activation x output weight; their sum + bias ({result["bias"]:+.3f}) '
@@ -276,15 +308,16 @@ class PredictionDashboard:
         self.slider.on_changed(self.select_filter)
         self.fig.text(.64, .065, 'Blue / red = signed weights or contributions\n'
                       'Bright = stronger activation or sensitivity', color=MUTED, fontsize=9)
-        self.message = self.fig.text(.055, .885, '', color=RED, fontsize=9)
+        self.message = self.fig.text(.055, .835, '', color=RED, fontsize=9)
         if choose_image is not None:
-            self.open_button = Button(self.fig.add_axes([.83, .90, .13, .04]),
+            self.open_button = Button(self.fig.add_axes([.83, .865, .13, .04]),
                                       'Open image', color=PANEL, hovercolor='#30415c')
             self.open_button.on_clicked(self.open_image)
-            self.draw_button = Button(self.fig.add_axes([.68, .90, .13, .04]),
+            self.draw_button = Button(self.fig.add_axes([.68, .865, .13, .04]),
                                       'Draw digit', color=PANEL, hovercolor='#30415c')
             self.draw_button.on_clicked(self.draw_digit)
             self.fig.canvas.mpl_connect('close_event', self.close_drawing)
+        responsive_text(self.fig)
 
     def close_drawing(self, _):
         if self.drawing is not None:
