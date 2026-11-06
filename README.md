@@ -32,6 +32,37 @@ automatically; `--device cpu` overrides this. Linux desktop users may need their
 distribution's `python3-tk` package. A notebook's inline plotting backend does not
 provide the live desktop window; run the commands in a terminal.
 
+After cloning, change into `Visualizable-Neural-Network`, create and activate
+the environment above, and install the requirements. Check the setup and run
+a small first training session from that same terminal.
+
+```sh
+python main.py doctor
+python train.py --epochs 1 --max-train-samples 2048 --max-eval-samples 256
+python predict.py examples/digit.png --run latest
+```
+
+The small training run is a startup check. It downloads MNIST on first use
+and saves a checkpoint that the prediction command can open.
+
+The doctor reports the active Python executable, package imports and versions,
+rendering backend, selected device, local MNIST data, and checkpoint load
+status. It exits with status 1 for failed checks. Missing data and an absent
+default checkpoint are normal on a fresh clone. The doctor checks local files
+without downloading data or starting training.
+
+| Doctor result | What to do |
+| --- | --- |
+| Package import fails | Activate `.venv`, then run `python -m pip install -r requirements.txt`. If both PyTorch packages are installed, check that `torch` and `torchvision` come from matching builds. |
+| Display fails | Use a desktop Python with Tk support, or use `--no-ui` for the doctor and the command you want to run. |
+| Device fails | Try `--device cpu` on the doctor and training or inference command. |
+| Data is missing or unreadable | Start training to download missing data. If existing data is unreadable, use `--data-dir` with a fresh folder. |
+| Checkpoint fails | Use `--checkpoint` with a compatible saved model or train a fresh one. |
+
+For a headless check or a specific checkpoint, run `python doctor.py --no-ui`
+or `python doctor.py --no-ui --checkpoint path/to/model.pt`. Use
+`python doctor.py --help` for all options, including custom data and run folders.
+
 ## 1. Train with live visualization
 
 ```sh

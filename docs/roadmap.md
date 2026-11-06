@@ -14,7 +14,7 @@ later items may be adjusted as user feedback reveals better priorities.
 | 6 | Draw a digit and test it | Add a drawing canvas with Clear and Predict, using the same preprocessing as image files. Show the normalized input so users can understand unexpected results. | Implemented |
 | 7 | Add a saved-model evaluation view | Evaluate an existing checkpoint with a confusion matrix, per-digit accuracy, and example mistakes. Separate full-test and subset results and avoid retraining. | Implemented |
 | 8 | Improve dashboard layout and readability | Make spacing, labels, color legends, and sample captions readable at common window sizes. Inspect both training and prediction views at multiple sizes. | Implemented |
-| 9 | Add setup diagnostics and actionable errors | Add a diagnostic command for dependencies, GUI support, device availability, data, and checkpoints. Explain how to fix failures and document a fresh-clone walkthrough. | Planned |
+| 9 | Add setup diagnostics and actionable errors | Add a diagnostic command for dependencies, GUI support, device availability, data, and checkpoints. Explain how to fix failures and document a fresh-clone walkthrough. | Implemented |
 | 10 | Automate checks and refresh project documentation | Add GitHub Actions for CPU tests on Windows and Linux, document supported versions, and update screenshots and the quick start to match the shipped workflow. | Planned |
 
 ## Commit 1 validation
