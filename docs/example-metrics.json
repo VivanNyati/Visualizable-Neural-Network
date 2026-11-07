@@ -1,6 +1,6 @@
 {
-  "epochs_completed": 2,
-  "steps": 1720,
+  "epochs_completed": 4,
+  "steps": 3440,
   "seed": 42,
   "interrupted": false,
   "history": [
@@ -23,13 +23,42 @@
         "accuracy": 0.9806,
         "samples": 5000
       }
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.05842595943618904,
+      "train_accuracy": 0.9819272727272728,
+      "validation": {
+        "loss": 0.05582152242660522,
+        "accuracy": 0.9848,
+        "samples": 5000
+      }
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.04539153973107988,
+      "train_accuracy": 0.9862909090909091,
+      "validation": {
+        "loss": 0.06426337690353394,
+        "accuracy": 0.9798,
+        "samples": 5000
+      }
     }
   ],
   "test": {
-    "loss": 0.05403664410952479,
-    "accuracy": 0.9812,
+    "loss": 0.050344274996733294,
+    "accuracy": 0.9839,
     "samples": 10000
   },
   "train_samples": 55000,
-  "elapsed_seconds": 80.60900000000038
+  "elapsed_seconds": 360.6350958000403,
+  "best": {
+    "epoch": 3,
+    "validation": {
+      "loss": 0.05582152242660522,
+      "accuracy": 0.9848,
+      "samples": 5000
+    },
+    "checkpoint": "C:\\Users\\reala\\Documents\\code\\Visualizable-Neural-Network\\runs\\commit10-verification\\mnist.best.pt"
+  }
 }

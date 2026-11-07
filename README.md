@@ -1,17 +1,22 @@
 # Digit Lab: Visualizable Neural Network
 
-A small PyTorch CNN with two separate workflows: watch it learn handwritten digits,
-then inspect how it processes an image of your own. The views display actual model
+A small PyTorch CNN for watching handwritten-digit training, inspecting files or
+drawings, and evaluating saved models. The views display actual model
 tensors at a high level without rendering thousands of connections every batch.
 
 ![Training dashboard](docs/training.png)
 ![Image inspector](docs/prediction.png)
+![Saved-model evaluation](docs/evaluation.png)
 
 ## Setup
 
-Use Python 3.11 or 3.12 with a desktop GUI. In the repository directory:
+Use Python 3.11 or 3.12 with a desktop GUI. The CPU test workflow targets these
+versions on Windows and Linux. For headless use, add `--no-ui` to the workflow
+commands below. Start from a fresh clone:
 
 ```sh
+git clone https://github.com/VivanNyati/Visualizable-Neural-Network.git
+cd Visualizable-Neural-Network
 python -m venv .venv
 # Windows PowerShell:
 .venv\Scripts\Activate.ps1
@@ -40,10 +45,20 @@ a small first training session from that same terminal.
 python main.py doctor
 python train.py --epochs 1 --max-train-samples 2048 --max-eval-samples 256
 python predict.py examples/digit.png --run latest
+python evaluate.py --run latest --weights best
 ```
 
 The small training run is a startup check. It downloads MNIST on first use
 and saves a checkpoint that the prediction command can open.
+
+For the complete headless workflow, run these after setup:
+
+```sh
+python main.py doctor --no-ui --device cpu
+python train.py --no-ui --device cpu --epochs 1 --max-train-samples 2048 --max-eval-samples 256
+python predict.py examples/digit.png --run latest --no-ui --output runs/first-prediction.png
+python evaluate.py --run latest --weights best --no-ui --max-eval-samples 500
+```
 
 The doctor reports the active Python executable, package imports and versions,
 rendering backend, selected device, local MNIST data, and checkpoint load
@@ -247,6 +262,13 @@ The same `--run`, `--weights`, and `--runs-dir` selection options work as in
 prediction. `python main.py evaluate ...` is an equivalent entry point.
 
 ## Code layout and checks
+
+GitHub Actions runs the unittest suite and headless diagnostics on Windows and
+Linux with Python 3.11 and 3.12 for pushes to `main` and pull requests. The tests
+use synthetic data and temporary checkpoints, so they run without downloading
+MNIST. View results in the repository's [Actions page](https://github.com/VivanNyati/Visualizable-Neural-Network/actions).
+The [verification notes](docs/verification.md) record the local environment and
+the measured run used for the screenshots.
 
 See the [improvement roadmap](docs/roadmap.md) for the next ten focused changes.
 
