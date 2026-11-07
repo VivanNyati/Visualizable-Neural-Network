@@ -26,7 +26,7 @@ class TinyDigits(Dataset):
 class TrainingSaveTests(unittest.TestCase):
     def test_best_weights_survive_ties_and_later_regression(self):
         with tempfile.TemporaryDirectory() as directory:
-            checkpoint = Path(directory) / 'model.pt'
+            checkpoint = (Path(directory) / 'model.pt').resolve()
             snapshots = {}
 
             def capture(model, path, metadata):
@@ -79,7 +79,7 @@ class TrainingSaveTests(unittest.TestCase):
                         views[0].stop(None)
                     return result
 
-                checkpoint = Path(directory) / 'model.pt'
+                checkpoint = (Path(directory) / 'model.pt').resolve()
                 with patch('torchvision.datasets.MNIST', return_value=TinyDigits()), \
                         patch('dashboard.TrainingDashboard', View), \
                         patch('train.evaluate', side_effect=evaluate_and_stop):

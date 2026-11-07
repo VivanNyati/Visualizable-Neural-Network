@@ -36,5 +36,9 @@ and executes `python -m unittest discover -v` on Windows and Linux with Python
 MNIST downloads are unnecessary for these tests. Desktop GUI and GPU execution
 remain outside the CI checks. The Actions page records each remote run's status.
 
+The first CI run exposed Windows short-path aliases in temporary directories.
+Training test fixtures now resolve their checkpoint paths before comparison,
+matching the application's path normalization.
+
 The workflow follows the upstream [checkout](https://github.com/actions/checkout)
 and [setup-python](https://github.com/actions/setup-python) usage documentation.
